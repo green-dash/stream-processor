@@ -1,0 +1,15 @@
+target
+/.idea
+/.sbtserver
+/.idea_modules
+/.classpath
+/.project
+/.project/.sbtserver*
+/.settings
+/RUNNING_PID
+*.swp
+work/checkpoint
+work/spark.pid
+project/project
+project/work
+*.iml
