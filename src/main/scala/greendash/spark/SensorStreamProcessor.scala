@@ -1,6 +1,6 @@
 package greendash.spark
 
-import greendash.spark.model.{SensorEvent, TagValues}
+import greendash.spark.model.{SensorEvent, TagValues, TimedValue}
 import greendash.spark.pub.KafkaStreamPublisher
 import greendash.spark.util.AppConfig._
 import greendash.spark.util.AppUtil._
@@ -46,14 +46,16 @@ object SensorStreamProcessor {
     def publishGraphStream(ssc: StreamingContext, sensorStream: DStream[SensorEvent]) = {
 
         val graphStream = sensorStream
-            .map(event => (event.tagName, event.value))
+            .map(event => (event.tagName, (event.timestamp, event.value)))
             .groupByKeyAndWindow(streamGraphWindowSize, streamGraphSlideSize)
             .map { case (tag, list) =>
-                val max = list.max
-                val min = list.min
+                val valueList = list.map {_._2}
+                val max = valueList.max
+                val min = valueList.min
                 val d = max - min
-                val normalized = list.map { v => if (d != 0.0) (v - min) / d else v }
-                TagValues(tag, normalized.toList)
+                val normalized = valueList.map { v => if (d != 0.0) (v - min) / d else 1.0 }
+                val zip = list.map(_._1).zip(normalized) map { case (t, v) => TimedValue(t, v)}
+                TagValues(tag, zip.toList)
             }
             .map { (tv: TagValues) => Json.stringify(Json.toJson(tv)) }
 
