@@ -24,7 +24,8 @@ case object AppConfig {
     kafkaProducerProps.put("value.serializer", conf.getString("kafka.producer.properties.value.serializer"))
 
     /* stream graph settings */
-    val streamGraphTopic = conf.getString("kafka.producer.topics.stream.graph")
+    val normalizedByTagTopic = conf.getString("kafka.producer.topics.normalizedByTag")
+    val groupedByTagTopic = conf.getString("kafka.producer.topics.groupedByTag")
     val streamGraphWindowSize = Milliseconds(conf.getLong("stream.graph.window.size"))
     val streamGraphSlideSize = Milliseconds(conf.getLong("stream.graph.slide.size"))
 
