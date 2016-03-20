@@ -163,7 +163,7 @@ object SensorStreamProcessor {
             )
 
         val jsonStream = joinedStream map { case (tag, (xMean, xMean1s, xMean2s)) =>
-                s"""{ "tag": "$tag", "xMean": $xMean, "xMean1s": $xMean1s, "xMean2s": $xMean2s }"""
+                s"""{ "tag": "$tag", "deviations": [$xMean, $xMean1s, $xMean2s] }"""
         }
 
         val pStream = jsonStream.glom().map(a => "[" + a.mkString(",") + "]")
