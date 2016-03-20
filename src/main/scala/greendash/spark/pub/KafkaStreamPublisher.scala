@@ -1,6 +1,7 @@
 package greendash.spark.pub
 
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
+import org.apache.spark.rdd.RDD
 import org.apache.spark.streaming.dstream.DStream
 import greendash.spark.util.AppConfig._
 

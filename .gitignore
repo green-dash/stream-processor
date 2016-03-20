@@ -13,3 +13,5 @@ work/spark.pid
 project/project
 project/work
 *.iml
+derby.log
+metastore_db

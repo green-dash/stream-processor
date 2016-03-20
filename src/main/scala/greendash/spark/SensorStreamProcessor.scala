@@ -1,6 +1,6 @@
 package greendash.spark
 
-import greendash.spark.model.{SensorEvent, TagValues, TimedValue}
+import greendash.spark.model.{MetricStats, SensorEvent, TagValues, TimedValue}
 import greendash.spark.pub.KafkaStreamPublisher
 import greendash.spark.util.AppConfig._
 import org.apache.spark.SparkConf
@@ -14,7 +14,7 @@ object SensorStreamProcessor {
     def main(args: Array[String]): Unit = {
 
         val sparkConf = new SparkConf()
-            .setMaster("local[*]")
+            .setMaster("local[2]")
             .setAppName("SensorStreamProcessor")
             .set("spark.logConf", "true")
             .set("spark.akka.logLifecycleEvents", "true")
@@ -43,6 +43,15 @@ object SensorStreamProcessor {
         groupedByTagStream.cache()
 
         normalizeByTag(groupedByTagStream)
+
+        calculateSummaryStats(sensorStream)
+    }
+
+    def assembleByTag(sensorStream: DStream[SensorEvent]) = {
+        val s: DStream[Array[(String, Iterable[(Long, Double)])]] = sensorStream
+            .map(event => (event.tagName, (event.timestamp, event.value)))
+            .groupByKey()
+            .glom()
     }
 
     def groupByTag(sensorStream: DStream[SensorEvent]) = {
@@ -64,12 +73,18 @@ object SensorStreamProcessor {
     def normalizeByTag(groupedByTag: DStream[TagValues])= {
 
         val normalizedStream = groupedByTag.map { tv: TagValues =>
-            val valueList = tv.values.map {_.value}
-            val max = valueList.max
-            val min = valueList.min
+            val values: List[Double] = tv.values.map {_.value}
+            val mean: Double = values.sum / values.length
+            val devs = values.map(value => (value - mean) * (value - mean))
+            val sd = Math.sqrt(devs.sum / values.length)
+            val standardized = values.map(v => (v - mean) / sd)
+
+            val max = values.max
+            val min = values.min
             val d = max - min
-            val normalized = valueList.map { v => if (d != 0.0) (v - min) / d else 1.0 }
-            val zip = tv.values.map(_.timestamp).zip(normalized) map { case (t, v) => TimedValue(t, v)}
+            val normalized = values.map { v => if (d != 0.0) (v - min) / d else 1.0 }
+
+            val zip = tv.values.map(_.timestamp).zip(standardized) map { case (t, v) => TimedValue(t, v)}
             TagValues(tv.tag, zip.toList)
         }
 
@@ -78,6 +93,28 @@ object SensorStreamProcessor {
         KafkaStreamPublisher.publishStream(normalizedByTagTopic, pStream)
 
         normalizedStream
+    }
+
+    def calculateSummaryStats(stream: DStream[SensorEvent]) = {
+
+        val statStream = stream map { event =>
+            (event.tagName, MetricStats(event.value))
+        } reduceByKeyAndWindow(
+            numPartitions = 1, // needed for glomming all keys into 1 stream (not for production !)
+            reduceFunc = { (x, y) => x.merge(y) },
+            windowDuration = summaryStatsWindowSize,
+            slideDuration = summaryStatsSlideSize
+        )
+
+
+        val jsonStream = statStream map { case (tag, stats) =>
+                s"""{ "tag": "$tag", "stats": ${stats.toJson} }"""
+        }
+
+        val pStream = jsonStream.glom().map(a => "[" + a.mkString(",") + "]")
+
+        KafkaStreamPublisher.publishStream(summaryStatsTopic, pStream)
+
     }
 
 }

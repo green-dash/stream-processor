@@ -29,4 +29,9 @@ case object AppConfig {
     val streamGraphWindowSize = Milliseconds(conf.getLong("stream.graph.window.size"))
     val streamGraphSlideSize = Milliseconds(conf.getLong("stream.graph.slide.size"))
 
+    /* summary statistics */
+    val summaryStatsTopic = conf.getString("kafka.producer.topics.summaryStats")
+    val summaryStatsWindowSize = Milliseconds(conf.getLong("summaryStats.window.size"))
+    val summaryStatsSlideSize = Milliseconds(conf.getLong("summaryStats.slide.size"))
+
 }
