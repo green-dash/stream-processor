@@ -45,15 +45,8 @@ object SensorStreamProcessor {
         normalizeByTag(groupedByTagStream)
         standardizeByTag(groupedByTagStream)
 
-        calculateSummaryStats(sensorStream)
+        // calculateSummaryStats(sensorStream)
         calculateDeviations(sensorStream)
-    }
-
-    def assembleByTag(sensorStream: DStream[SensorEvent]) = {
-        val s: DStream[Array[(String, Iterable[(Long, Double)])]] = sensorStream
-            .map(event => (event.tagName, (event.timestamp, event.value)))
-            .groupByKey()
-            .glom()
     }
 
     def groupByTag(sensorStream: DStream[SensorEvent]) = {
@@ -65,11 +58,40 @@ object SensorStreamProcessor {
                 TagValues(tag, tvl.toList)
             }
 
-        val pStream = tagStream.map { (tv: TagValues) => Json.stringify(Json.toJson(tv)) }
+        val jsonStream = tagStream.map { _.toJson }
+
+        val pStream = jsonStream
+            .repartition(1) // needed for glomming (not best practice)
+            .glom()
+            .map(a => "[" + a.mkString(",") + "]")
 
         KafkaStreamPublisher.publishStream(groupedByTagTopic, pStream)
 
         tagStream
+    }
+
+    def standardizeByTag(groupedByTag: DStream[TagValues])= {
+        val standardizedStream = groupedByTag.map { tv: TagValues =>
+            val values = tv.values.map {_.value}
+            val mean: Double = values.sum / values.length
+            val devs = values.map(value => (value - mean) * (value - mean))
+            val sd = Math.sqrt(devs.sum / values.length)
+            val standardized = values.map(v => (v - mean) / sd)
+
+            val zip = tv.values.map(_.timestamp).zip(standardized) map { case (t, v) => TimedValue(t,  if (v.isNaN || v.isInfinite) 0.0 else v)}
+            TagValues(tv.tag, zip.toList)
+        }
+
+        val jsonStream = standardizedStream.map { _.toJson }
+
+        val pStream = jsonStream
+            .repartition(1) // needed for glomming (not best practice)
+            .glom()
+            .map(a => "[" + a.mkString(",") + "]")
+
+        KafkaStreamPublisher.publishStream(standardizedByTagTopic, pStream)
+
+        standardizedStream
     }
 
     def normalizeByTag(groupedByTag: DStream[TagValues])= {
@@ -85,30 +107,16 @@ object SensorStreamProcessor {
             TagValues(tv.tag, zip.toList)
         }
 
-        val pStream = normalizedStream.map { (tv: TagValues) => Json.stringify(Json.toJson(tv)) }
+        val jsonStream = normalizedStream.map { _.toJson }
+
+        val pStream = jsonStream
+            .repartition(1) // needed for glomming (not best practice)
+            .glom()
+            .map(a => "[" + a.mkString(",") + "]")
 
         KafkaStreamPublisher.publishStream(normalizedByTagTopic, pStream)
 
         normalizedStream
-    }
-
-    def standardizeByTag(groupedByTag: DStream[TagValues])= {
-        val standardizedStream = groupedByTag.map { tv: TagValues =>
-            val values: List[Double] = tv.values.map {_.value}
-            val mean: Double = values.sum / values.length
-            val devs = values.map(value => (value - mean) * (value - mean))
-            val sd = Math.sqrt(devs.sum / values.length)
-            val standardized = values.map(v => (v - mean) / sd)
-
-            val zip = tv.values.map(_.timestamp).zip(standardized) map { case (t, v) => TimedValue(t, v)}
-            TagValues(tv.tag, zip.toList)
-        }
-
-        val pStream = standardizedStream.map { (tv: TagValues) => Json.stringify(Json.toJson(tv)) }
-
-        KafkaStreamPublisher.publishStream(standardizedByTagTopic, pStream)
-
-        standardizedStream
     }
 
 
@@ -156,7 +164,7 @@ object SensorStreamProcessor {
                 (tag, (xMean, xMean1s, xMean2s))
             }
             .reduceByKeyAndWindow(
-                numPartitions = 1, // needed for glomming all keys into 1 stream (not for production !)
+                // numPartitions = 1, // needed for glomming all keys into 1 stream (not for production !)
                 reduceFunc = (x, y) => (x._1 + y._1, x._2 + y._2, x._3 + y._3),
                 windowDuration = summaryStatsWindowSize,
                 slideDuration = summaryStatsSlideSize
@@ -166,10 +174,12 @@ object SensorStreamProcessor {
                 s"""{ "tag": "$tag", "deviations": [$xMean, $xMean1s, $xMean2s] }"""
         }
 
-        val pStream = jsonStream.glom().map(a => "[" + a.mkString(",") + "]")
+        val pStream = jsonStream
+            .repartition(1) // needed for glomming (not best practice)
+            .glom()
+            .map(a => "[" + a.mkString(",") + "]")
+
         KafkaStreamPublisher.publishStream(deviationTopic, pStream)
     }
-
-
 
 }

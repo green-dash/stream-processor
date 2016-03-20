@@ -1,14 +1,13 @@
 package greendash.spark.model
 
-import play.api.libs.json.Json
-
-case class TimedValue(timestamp: Long, value: Double)
-object TimedValue {
-    implicit val f = Json.format[TimedValue]
+case class TimedValue(timestamp: Long, value: Double) {
+    def toJson =  s"""{ "timestamp": $timestamp, "value": $value }"""
 }
 
-case class TagValues(tag:String, values: List[TimedValue])
-object TagValues {
-    implicit val f = Json.format[TagValues]
+case class TagValues(tag:String, values: List[TimedValue]) {
+    def toJson = {
+        val jsonValues = "[" + values.map {_.toJson}.mkString(",") + "]"
+        s"""{ "tag": "$tag", "values": $jsonValues }"""
+    }
 }
 

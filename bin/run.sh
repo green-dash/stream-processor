@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+bin/stop.sh
+
 sbt assembly
 if [ $? -ne 0 ]
 then
