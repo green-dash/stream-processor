@@ -25,12 +25,14 @@ case object AppConfig {
 
     /* stream graph settings */
     val normalizedByTagTopic = conf.getString("kafka.producer.topics.normalizedByTag")
+    val standardizedByTagTopic = conf.getString("kafka.producer.topics.standardizedByTag")
     val groupedByTagTopic = conf.getString("kafka.producer.topics.groupedByTag")
     val streamGraphWindowSize = Milliseconds(conf.getLong("stream.graph.window.size"))
     val streamGraphSlideSize = Milliseconds(conf.getLong("stream.graph.slide.size"))
 
     /* summary statistics */
     val summaryStatsTopic = conf.getString("kafka.producer.topics.summaryStats")
+    val deviationTopic = conf.getString("kafka.producer.topics.deviation")
     val summaryStatsWindowSize = Milliseconds(conf.getLong("summaryStats.window.size"))
     val summaryStatsSlideSize = Milliseconds(conf.getLong("summaryStats.slide.size"))
 

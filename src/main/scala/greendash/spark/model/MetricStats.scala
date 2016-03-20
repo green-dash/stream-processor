@@ -2,7 +2,7 @@ package greendash.spark.model
 
 import org.apache.spark.util.StatCounter
 
-class MetricStats(private var stats: StatCounter) extends Serializable {
+class MetricStats(val stats: StatCounter) extends Serializable {
 
     def merge(other: MetricStats): MetricStats = {
         stats.merge(other.stats)
@@ -16,8 +16,6 @@ class MetricStats(private var stats: StatCounter) extends Serializable {
 }
 
 object MetricStats extends Serializable {
-
     def apply(x: Double) = new MetricStats(new StatCounter().merge(x))
-
 }
 
